@@ -1,7 +1,6 @@
 package main
 
-import "fmt"
+import "github.com/jhonnatangomes/golox/lox"
 
 func main() {
-	fmt.Println("Hello, World!")
 }
