@@ -5,6 +5,11 @@ type OpCode int
 const (
 	OpReturn OpCode = iota
 	OpConstant
+	OpNegate
+	OpAdd
+	OpSubtract
+	OpMultiply
+	OpDivide
 )
 
 type Chunk struct {
