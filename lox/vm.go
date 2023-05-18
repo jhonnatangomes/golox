@@ -28,8 +28,9 @@ func NewVm(chunk *Chunk) *Vm {
 	}
 }
 
-func (vm *Vm) Interpret() InterpretResult {
-	return vm.run()
+func (vm *Vm) Interpret(source string) InterpretResult {
+	compile(source)
+	return InterpretOk
 }
 
 func (vm *Vm) push(value Value) {
@@ -44,14 +45,8 @@ func (vm *Vm) pop() Value {
 
 func (vm *Vm) run() InterpretResult {
 	for {
-		fmt.Print("          ")
-		for value := 0; value < vm.stackTop; value++ {
-			fmt.Print("[ ")
-			printValue(vm.stack[value])
-			fmt.Print(" ]")
-		}
-		fmt.Println()
-		vm.chunk.disassembleInstruction(vm.ip)
+		// Only enable in debug
+		vm.debugTraceExecution()
 
 		instruction := vm.readByte()
 		switch OpCode(instruction) {
@@ -103,4 +98,15 @@ func (vm *Vm) readByte() byte {
 
 func (vm *Vm) readConstant() Value {
 	return vm.chunk.constants[vm.readByte()]
+}
+
+func (vm *Vm) debugTraceExecution() {
+	fmt.Print("          ")
+	for value := 0; value < vm.stackTop; value++ {
+		fmt.Print("[ ")
+		printValue(vm.stack[value])
+		fmt.Print(" ]")
+	}
+	fmt.Println()
+	vm.chunk.disassembleInstruction(vm.ip)
 }

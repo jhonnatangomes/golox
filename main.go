@@ -1,26 +1,61 @@
 package main
 
-import "github.com/jhonnatangomes/golox/lox"
+import (
+	"bufio"
+	"flag"
+	"fmt"
+	"os"
+
+	"github.com/jhonnatangomes/golox/lox"
+)
 
 func main() {
+	flag.Parse()
+	args := flag.Args()
+	if len(args) == 0 {
+		repl()
+	} else if len(args) == 1 {
+		runFile(args[1])
+	} else {
+		fmt.Fprintf(os.Stderr, "Usage: golox [path]\n")
+		os.Exit(64)
+	}
+}
+
+func repl() {
 	chunk := lox.NewChunk()
 	vm := lox.NewVm(chunk)
-	constant := chunk.AddConstant(1.2)
-	chunk.Write(byte(lox.OpConstant), 123)
-	chunk.Write(byte(constant), 123)
-	constant = chunk.AddConstant(3.4)
-	chunk.Write(byte(lox.OpConstant), 123)
-	chunk.Write(byte(constant), 123)
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("> ")
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Error reading input:", err)
+			os.Exit(64)
+		}
+		vm.Interpret(input)
+	}
+}
 
-	chunk.Write(byte(lox.OpAdd), 123)
+func runFile(path string) {
+	chunk := lox.NewChunk()
+	vm := lox.NewVm(chunk)
+	source := readFile(path)
+	result := vm.Interpret(source)
 
-	constant = chunk.AddConstant(5.6)
-	chunk.Write(byte(lox.OpConstant), 123)
-	chunk.Write(byte(constant), 123)
+	if result == lox.InterpretCompileError {
+		os.Exit(65)
+	}
+	if result == lox.InterpretRuntimeError {
+		os.Exit(70)
+	}
+}
 
-	chunk.Write(byte(lox.OpDivide), 123)
-	chunk.Write(byte(lox.OpNegate), 123)
-	chunk.Write(byte(lox.OpReturn), 123)
-	// chunk.Disassemble("test chunk")
-	vm.Interpret()
+func readFile(path string) string {
+	file, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Could not read file %s\n", path)
+		os.Exit(74)
+	}
+	return string(file)
 }
