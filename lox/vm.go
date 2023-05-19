@@ -2,13 +2,10 @@ package lox
 
 import "fmt"
 
-const STACK_MAX = 256
-
 type Vm struct {
-	chunk    *Chunk
-	ip       int
-	stack    [STACK_MAX]Value
-	stackTop int
+	chunk *Chunk
+	ip    int
+	stack []Value
 }
 
 type InterpretResult int
@@ -21,26 +18,31 @@ const (
 
 func NewVm(chunk *Chunk) *Vm {
 	return &Vm{
-		chunk:    chunk,
-		ip:       0,
-		stack:    *new([STACK_MAX]Value),
-		stackTop: 0,
+		chunk: chunk,
+		ip:    0,
+		stack: make([]Value, 0),
 	}
 }
 
 func (vm *Vm) Interpret(source string) InterpretResult {
-	compile(source)
-	return InterpretOk
+	chunk := NewChunk()
+	compiler := NewCompiler(source, chunk)
+	if !compiler.compile() {
+		return InterpretCompileError
+	}
+	vm.chunk = chunk
+	vm.ip = 0
+	return vm.run()
 }
 
 func (vm *Vm) push(value Value) {
-	vm.stack[vm.stackTop] = value
-	vm.stackTop += 1
+	vm.stack = append(vm.stack, value)
 }
 
 func (vm *Vm) pop() Value {
-	vm.stackTop -= 1
-	return vm.stack[vm.stackTop]
+	value := vm.stack[len(vm.stack)-1]
+	vm.stack = vm.stack[:len(vm.stack)-1]
+	return value
 }
 
 func (vm *Vm) run() InterpretResult {
@@ -102,7 +104,7 @@ func (vm *Vm) readConstant() Value {
 
 func (vm *Vm) debugTraceExecution() {
 	fmt.Print("          ")
-	for value := 0; value < vm.stackTop; value++ {
+	for value := range vm.stack {
 		fmt.Print("[ ")
 		printValue(vm.stack[value])
 		fmt.Print(" ]")
