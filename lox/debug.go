@@ -33,6 +33,27 @@ func (chunk *Chunk) disassembleInstruction(offset int) int {
 		return chunk.simpleInstruction("OP_MULTIPLY", offset)
 	case OpDivide:
 		return chunk.simpleInstruction("OP_DIVIDE", offset)
+	case OpNil:
+		return chunk.simpleInstruction("OP_NIL", offset)
+	case OpTrue:
+		return chunk.simpleInstruction("OP_TRUE", offset)
+	case OpFalse:
+		return chunk.simpleInstruction("OP_FALSE", offset)
+	case OpNot:
+		return chunk.simpleInstruction("OP_NOT", offset)
+	case OpEqual:
+		return chunk.simpleInstruction("OP_EQUAL", offset)
+	case OpNotEqual:
+		return chunk.simpleInstruction("OP_NOT_EQUAL", offset)
+	case OpGreater:
+		return chunk.simpleInstruction("OP_GREATER", offset)
+	case OpGreaterEqual:
+		return chunk.simpleInstruction("OP_GREATER_EQUAL", offset)
+	case OpLess:
+		return chunk.simpleInstruction("OP_LESS", offset)
+	case OpLessEqual:
+		return chunk.simpleInstruction("OP_LESS_EQUAL", offset)
+
 	default:
 		fmt.Printf("Unknown opcode %d\n", instruction)
 		return offset + 1
@@ -47,7 +68,7 @@ func (chunk *Chunk) simpleInstruction(name string, offset int) int {
 func (chunk *Chunk) constantInstruction(name string, offset int) int {
 	constant := chunk.code[offset+1]
 	fmt.Printf("%-16s %4d '", name, constant)
-	printValue(chunk.constants[constant])
+	chunk.constants[constant].print()
 	fmt.Printf("'\n")
 	return offset + 2
 }

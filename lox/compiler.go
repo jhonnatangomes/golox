@@ -123,7 +123,7 @@ func (compiler *Compiler) expression() {
 
 func (compiler *Compiler) number() {
 	value, _ := strconv.ParseFloat(compiler.previous.lexeme, 64)
-	compiler.emitConstant(Value(value))
+	compiler.emitConstant(NumberValue(value))
 }
 
 func (compiler *Compiler) grouping() {
@@ -138,6 +138,8 @@ func (compiler *Compiler) unary() {
 	switch operatorType {
 	case TokenMinus:
 		compiler.emitByte(byte(OpNegate))
+	case TokenBang:
+		compiler.emitByte(byte(OpNot))
 	}
 }
 
@@ -171,51 +173,74 @@ func (compiler *Compiler) binary() {
 		compiler.emitByte(byte(OpMultiply))
 	case TokenSlash:
 		compiler.emitByte(byte(OpDivide))
+	case TokenBangEqual:
+		compiler.emitByte(byte(OpNotEqual))
+	case TokenEqualEqual:
+		compiler.emitByte(byte(OpEqual))
+	case TokenGreater:
+		compiler.emitByte(byte(OpGreater))
+	case TokenGreaterEqual:
+		compiler.emitByte(byte(OpGreaterEqual))
+	case TokenLess:
+		compiler.emitByte(byte(OpLess))
+	case TokenLessEqual:
+		compiler.emitByte(byte(OpLessEqual))
+	}
+}
+
+func (compiler *Compiler) literal() {
+	switch compiler.previous.tokenType {
+	case TokenFalse:
+		compiler.emitByte(byte(OpFalse))
+	case TokenTrue:
+		compiler.emitByte(byte(OpTrue))
+	case TokenNil:
+		compiler.emitByte(byte(OpNil))
 	}
 }
 
 func (compiler *Compiler) getRule(tokenType TokenType) ParseRule {
 	rules := map[TokenType]ParseRule{
-		TokenLeftParen:    ParseRule{compiler.grouping, nil, PrecedenceNone},
-		TokenRightParen:   ParseRule{nil, nil, PrecedenceNone},
-		TokenLeftBrace:    ParseRule{nil, nil, PrecedenceNone},
-		TokenRightBrace:   ParseRule{nil, nil, PrecedenceNone},
-		TokenComma:        ParseRule{nil, nil, PrecedenceNone},
-		TokenDot:          ParseRule{nil, nil, PrecedenceNone},
-		TokenMinus:        ParseRule{compiler.unary, compiler.binary, PrecedenceTerm},
-		TokenPlus:         ParseRule{nil, compiler.binary, PrecedenceTerm},
-		TokenSemicolon:    ParseRule{nil, nil, PrecedenceNone},
-		TokenSlash:        ParseRule{nil, compiler.binary, PrecedenceFactor},
-		TokenStar:         ParseRule{nil, compiler.binary, PrecedenceFactor},
-		TokenBang:         ParseRule{nil, nil, PrecedenceNone},
-		TokenBangEqual:    ParseRule{nil, nil, PrecedenceNone},
-		TokenEqual:        ParseRule{nil, nil, PrecedenceNone},
-		TokenEqualEqual:   ParseRule{nil, nil, PrecedenceNone},
-		TokenGreater:      ParseRule{nil, nil, PrecedenceNone},
-		TokenGreaterEqual: ParseRule{nil, nil, PrecedenceNone},
-		TokenLess:         ParseRule{nil, nil, PrecedenceNone},
-		TokenLessEqual:    ParseRule{nil, nil, PrecedenceNone},
-		TokenIdentifier:   ParseRule{nil, nil, PrecedenceNone},
-		TokenString:       ParseRule{nil, nil, PrecedenceNone},
-		TokenNumber:       ParseRule{compiler.number, nil, PrecedenceNone},
-		TokenAnd:          ParseRule{nil, nil, PrecedenceNone},
-		TokenClass:        ParseRule{nil, nil, PrecedenceNone},
-		TokenElse:         ParseRule{nil, nil, PrecedenceNone},
-		TokenFalse:        ParseRule{nil, nil, PrecedenceNone},
-		TokenFor:          ParseRule{nil, nil, PrecedenceNone},
-		TokenFun:          ParseRule{nil, nil, PrecedenceNone},
-		TokenIf:           ParseRule{nil, nil, PrecedenceNone},
-		TokenNil:          ParseRule{nil, nil, PrecedenceNone},
-		TokenOr:           ParseRule{nil, nil, PrecedenceNone},
-		TokenPrint:        ParseRule{nil, nil, PrecedenceNone},
-		TokenReturn:       ParseRule{nil, nil, PrecedenceNone},
-		TokenSuper:        ParseRule{nil, nil, PrecedenceNone},
-		TokenThis:         ParseRule{nil, nil, PrecedenceNone},
-		TokenTrue:         ParseRule{nil, nil, PrecedenceNone},
-		TokenVar:          ParseRule{nil, nil, PrecedenceNone},
-		TokenWhile:        ParseRule{nil, nil, PrecedenceNone},
-		TokenError:        ParseRule{nil, nil, PrecedenceNone},
-		TokenEOF:          ParseRule{nil, nil, PrecedenceNone},
+		TokenLeftParen:    {compiler.grouping, nil, PrecedenceNone},
+		TokenRightParen:   {nil, nil, PrecedenceNone},
+		TokenLeftBrace:    {nil, nil, PrecedenceNone},
+		TokenRightBrace:   {nil, nil, PrecedenceNone},
+		TokenComma:        {nil, nil, PrecedenceNone},
+		TokenDot:          {nil, nil, PrecedenceNone},
+		TokenMinus:        {compiler.unary, compiler.binary, PrecedenceTerm},
+		TokenPlus:         {nil, compiler.binary, PrecedenceTerm},
+		TokenSemicolon:    {nil, nil, PrecedenceNone},
+		TokenSlash:        {nil, compiler.binary, PrecedenceFactor},
+		TokenStar:         {nil, compiler.binary, PrecedenceFactor},
+		TokenBang:         {compiler.unary, nil, PrecedenceNone},
+		TokenBangEqual:    {nil, compiler.binary, PrecedenceEquality},
+		TokenEqual:        {nil, nil, PrecedenceNone},
+		TokenEqualEqual:   {nil, compiler.binary, PrecedenceEquality},
+		TokenGreater:      {nil, compiler.binary, PrecedenceComparison},
+		TokenGreaterEqual: {nil, compiler.binary, PrecedenceComparison},
+		TokenLess:         {nil, compiler.binary, PrecedenceComparison},
+		TokenLessEqual:    {nil, compiler.binary, PrecedenceComparison},
+		TokenIdentifier:   {nil, nil, PrecedenceNone},
+		TokenString:       {nil, nil, PrecedenceNone},
+		TokenNumber:       {compiler.number, nil, PrecedenceNone},
+		TokenAnd:          {nil, nil, PrecedenceNone},
+		TokenClass:        {nil, nil, PrecedenceNone},
+		TokenElse:         {nil, nil, PrecedenceNone},
+		TokenFalse:        {compiler.literal, nil, PrecedenceNone},
+		TokenFor:          {nil, nil, PrecedenceNone},
+		TokenFun:          {nil, nil, PrecedenceNone},
+		TokenIf:           {nil, nil, PrecedenceNone},
+		TokenNil:          {compiler.literal, nil, PrecedenceNone},
+		TokenOr:           {nil, nil, PrecedenceNone},
+		TokenPrint:        {nil, nil, PrecedenceNone},
+		TokenReturn:       {nil, nil, PrecedenceNone},
+		TokenSuper:        {nil, nil, PrecedenceNone},
+		TokenThis:         {nil, nil, PrecedenceNone},
+		TokenTrue:         {compiler.literal, nil, PrecedenceNone},
+		TokenVar:          {nil, nil, PrecedenceNone},
+		TokenWhile:        {nil, nil, PrecedenceNone},
+		TokenError:        {nil, nil, PrecedenceNone},
+		TokenEOF:          {nil, nil, PrecedenceNone},
 	}
 	return rules[tokenType]
 }

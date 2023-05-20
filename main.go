@@ -23,8 +23,7 @@ func main() {
 }
 
 func repl() {
-	chunk := lox.NewChunk()
-	vm := lox.NewVm(chunk)
+	vm := lox.NewVm()
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Print("> ")
@@ -38,8 +37,7 @@ func repl() {
 }
 
 func runFile(path string) {
-	chunk := lox.NewChunk()
-	vm := lox.NewVm(chunk)
+	vm := lox.NewVm()
 	source := readFile(path)
 	result := vm.Interpret(source)
 

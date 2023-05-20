@@ -10,6 +10,16 @@ const (
 	OpSubtract
 	OpMultiply
 	OpDivide
+	OpNil
+	OpTrue
+	OpFalse
+	OpNot
+	OpEqual
+	OpNotEqual
+	OpGreater
+	OpGreaterEqual
+	OpLess
+	OpLessEqual
 )
 
 type Chunk struct {
