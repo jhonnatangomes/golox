@@ -63,6 +63,10 @@ func (chunk *Chunk) disassembleInstruction(offset int) int {
 		return chunk.constantInstruction("OP_GET_GLOBAL", offset)
 	case OpSetGlobal:
 		return chunk.constantInstruction("OP_SET_GLOBAL", offset)
+	case OpGetLocal:
+		return chunk.byteInstruction("OP_GET_LOCAL", offset)
+	case OpSetLocal:
+		return chunk.byteInstruction("OP_SET_LOCAL", offset)
 	default:
 		fmt.Printf("Unknown opcode %d\n", instruction)
 		return offset + 1
@@ -79,5 +83,11 @@ func (chunk *Chunk) constantInstruction(name string, offset int) int {
 	fmt.Printf("%-16s %4d '", name, constant)
 	chunk.constants[constant].print()
 	fmt.Printf("'\n")
+	return offset + 2
+}
+
+func (chunk *Chunk) byteInstruction(name string, offset int) int {
+	slot := chunk.code[offset+1]
+	fmt.Printf("%-16s %4d\n", name, slot)
 	return offset + 2
 }

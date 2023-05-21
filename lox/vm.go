@@ -176,6 +176,16 @@ func (vm *Vm) run() InterpretResult {
 					vm.globals[name] = vm.peek(0)
 				}
 			}
+		case OpGetLocal:
+			{
+				slot := vm.readByte()
+				vm.push(vm.stack[slot])
+			}
+		case OpSetLocal:
+			{
+				slot := vm.readByte()
+				vm.stack[slot] = vm.peek(0)
+			}
 		}
 	}
 }

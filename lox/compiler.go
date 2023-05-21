@@ -7,24 +7,33 @@ import (
 )
 
 type Compiler struct {
-	chunk     *Chunk
-	scanner   *Scanner
-	source    string
-	previous  Token
-	current   Token
-	hadError  bool
-	panicMode bool
+	chunk      *Chunk
+	scanner    *Scanner
+	source     string
+	previous   Token
+	current    Token
+	hadError   bool
+	panicMode  bool
+	locals     []Local
+	scopeDepth int
+}
+
+type Local struct {
+	name  Token
+	depth int
 }
 
 func NewCompiler(source string, chunk *Chunk) *Compiler {
 	return &Compiler{
-		chunk:     chunk,
-		scanner:   NewScanner(source),
-		source:    source,
-		previous:  Token{},
-		current:   Token{},
-		hadError:  false,
-		panicMode: false,
+		chunk:      chunk,
+		scanner:    NewScanner(source),
+		source:     source,
+		previous:   Token{},
+		current:    Token{},
+		hadError:   false,
+		panicMode:  false,
+		locals:     make([]Local, 0),
+		scopeDepth: 0,
 	}
 }
 
@@ -170,7 +179,32 @@ func (compiler *Compiler) varDeclaration() {
 
 func (compiler *Compiler) parseVariable(errorMessage string) int {
 	compiler.consume(TokenIdentifier, errorMessage)
+	compiler.declareVariable()
+	if compiler.scopeDepth > 0 {
+		return 0
+	}
 	return compiler.identifierConstant(&compiler.previous)
+}
+
+func (compiler *Compiler) declareVariable() {
+	if compiler.scopeDepth == 0 {
+		return
+	}
+	name := compiler.previous
+	for i := len(compiler.locals) - 1; i >= 0; i-- {
+		local := compiler.locals[i]
+		if local.depth != -1 && local.depth < compiler.scopeDepth {
+			break
+		}
+		if name.lexeme == local.name.lexeme {
+			compiler.error("Already a variable with this name in this scope.")
+		}
+	}
+	compiler.addLocal(name)
+}
+
+func (compiler *Compiler) addLocal(name Token) {
+	compiler.locals = append(compiler.locals, Local{name, -1})
 }
 
 func (compiler *Compiler) identifierConstant(token *Token) int {
@@ -178,15 +212,46 @@ func (compiler *Compiler) identifierConstant(token *Token) int {
 }
 
 func (compiler *Compiler) defineVariable(global int) {
+	if compiler.scopeDepth > 0 {
+		compiler.markInitialized()
+		return
+	}
 	compiler.emitBytes(byte(OpDefineGlobal), byte(global))
+}
+
+func (compiler *Compiler) markInitialized() {
+	compiler.locals[len(compiler.locals)-1].depth = compiler.scopeDepth
 }
 
 func (compiler *Compiler) statement() {
 	if compiler.match(TokenPrint) {
 		compiler.printStatement()
+	} else if compiler.match(TokenLeftBrace) {
+		compiler.beginScope()
+		compiler.block()
+		compiler.endScope()
 	} else {
 		compiler.expressionStatement()
 	}
+}
+
+func (compiler *Compiler) beginScope() {
+	compiler.scopeDepth++
+}
+
+func (compiler *Compiler) endScope() {
+	compiler.scopeDepth--
+	for len(compiler.locals) > 0 && compiler.locals[len(compiler.locals)-1].depth > compiler.scopeDepth {
+		compiler.emitByte(byte(OpPop))
+		compiler.locals = compiler.locals[:len(compiler.locals)-1]
+	}
+}
+
+func (compiler *Compiler) block() {
+	for !compiler.check(TokenRightBrace) && !compiler.check(TokenEOF) {
+		compiler.declaration()
+	}
+	compiler.consume(TokenRightBrace, "Expect '}' after block.")
 }
 
 func (compiler *Compiler) printStatement() {
@@ -298,13 +363,36 @@ func (compiler *Compiler) variable(canAssign bool) {
 }
 
 func (compiler *Compiler) namedVariable(token Token, canAssign bool) {
-	arg := compiler.identifierConstant(&token)
+	var getOp, setOp byte
+	arg := compiler.resolveLocal(token)
+	if arg != -1 {
+		getOp = byte(OpGetLocal)
+		setOp = byte(OpSetLocal)
+	} else {
+		arg = compiler.identifierConstant(&token)
+		getOp = byte(OpGetGlobal)
+		setOp = byte(OpSetGlobal)
+	}
+
 	if canAssign && compiler.match(TokenEqual) {
 		compiler.expression()
-		compiler.emitBytes(byte(OpSetGlobal), byte(arg))
+		compiler.emitBytes(setOp, byte(arg))
 	} else {
-		compiler.emitBytes(byte(OpGetGlobal), byte(arg))
+		compiler.emitBytes(getOp, byte(arg))
 	}
+}
+
+func (compiler *Compiler) resolveLocal(token Token) int {
+	for i := len(compiler.locals) - 1; i >= 0; i-- {
+		local := compiler.locals[i]
+		if local.name.lexeme == token.lexeme {
+			if local.depth == -1 {
+				compiler.error("Cannot read local variable in its own initializer.")
+			}
+			return i
+		}
+	}
+	return -1
 }
 
 func (compiler *Compiler) getRule(tokenType TokenType) ParseRule {

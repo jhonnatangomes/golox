@@ -25,6 +25,8 @@ const (
 	OpDefineGlobal
 	OpGetGlobal
 	OpSetGlobal
+	OpGetLocal
+	OpSetLocal
 )
 
 type Chunk struct {
