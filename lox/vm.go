@@ -80,7 +80,24 @@ func (vm *Vm) run() InterpretResult {
 				return InterpretRuntimeError
 			}
 			vm.push(-vm.pop().(NumberValue))
-		case OpAdd, OpSubtract, OpMultiply, OpDivide, OpGreater, OpLess, OpGreaterEqual, OpLessEqual:
+		case OpAdd:
+			{
+				_, isBString := vm.peek(0).(StringValue)
+				_, isAString := vm.peek(1).(StringValue)
+				_, isBNumber := vm.peek(0).(NumberValue)
+				_, isANumber := vm.peek(1).(NumberValue)
+				if isAString && isBString {
+					b := vm.pop().(StringValue)
+					a := vm.pop().(StringValue)
+					vm.push(StringValue(a + b))
+				} else if isANumber && isBNumber {
+					vm.push(NumberValue(vm.pop().(NumberValue) + vm.pop().(NumberValue)))
+				} else {
+					vm.runtimeError("Operands must be two numbers or two strings.")
+					return InterpretRuntimeError
+				}
+			}
+		case OpSubtract, OpMultiply, OpDivide, OpGreater, OpLess, OpGreaterEqual, OpLessEqual:
 			{
 				_, isBNumber := vm.peek(0).(NumberValue)
 				_, isANumber := vm.peek(1).(NumberValue)
@@ -91,8 +108,6 @@ func (vm *Vm) run() InterpretResult {
 				b := vm.pop().(NumberValue)
 				a := vm.pop().(NumberValue)
 				switch OpCode(instruction) {
-				case OpAdd:
-					vm.push(a + b)
 				case OpSubtract:
 					vm.push(a - b)
 				case OpMultiply:

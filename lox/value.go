@@ -36,3 +36,13 @@ func (value NumberValue) print() {
 func (value NumberValue) isTruthy() bool {
 	return true
 }
+
+type StringValue string
+
+func (value StringValue) print() {
+	fmt.Print(value)
+}
+
+func (value StringValue) isTruthy() bool {
+	return true
+}

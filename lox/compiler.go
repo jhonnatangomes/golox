@@ -199,6 +199,11 @@ func (compiler *Compiler) literal() {
 	}
 }
 
+func (compiler *Compiler) string() {
+	lexeme := compiler.previous.lexeme
+	compiler.emitConstant(StringValue(lexeme[1 : len(lexeme)-1]))
+}
+
 func (compiler *Compiler) getRule(tokenType TokenType) ParseRule {
 	rules := map[TokenType]ParseRule{
 		TokenLeftParen:    {compiler.grouping, nil, PrecedenceNone},
@@ -221,7 +226,7 @@ func (compiler *Compiler) getRule(tokenType TokenType) ParseRule {
 		TokenLess:         {nil, compiler.binary, PrecedenceComparison},
 		TokenLessEqual:    {nil, compiler.binary, PrecedenceComparison},
 		TokenIdentifier:   {nil, nil, PrecedenceNone},
-		TokenString:       {nil, nil, PrecedenceNone},
+		TokenString:       {compiler.string, nil, PrecedenceNone},
 		TokenNumber:       {compiler.number, nil, PrecedenceNone},
 		TokenAnd:          {nil, nil, PrecedenceNone},
 		TokenClass:        {nil, nil, PrecedenceNone},
