@@ -15,7 +15,7 @@ func main() {
 	if len(args) == 0 {
 		repl()
 	} else if len(args) == 1 {
-		runFile(args[1])
+		runFile(args[0])
 	} else {
 		fmt.Fprintf(os.Stderr, "Usage: golox [path]\n")
 		os.Exit(64)

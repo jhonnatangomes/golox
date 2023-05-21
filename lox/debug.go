@@ -53,7 +53,16 @@ func (chunk *Chunk) disassembleInstruction(offset int) int {
 		return chunk.simpleInstruction("OP_LESS", offset)
 	case OpLessEqual:
 		return chunk.simpleInstruction("OP_LESS_EQUAL", offset)
-
+	case OpPrint:
+		return chunk.simpleInstruction("OP_PRINT", offset)
+	case OpPop:
+		return chunk.simpleInstruction("OP_POP", offset)
+	case OpDefineGlobal:
+		return chunk.constantInstruction("OP_DEFINE_GLOBAL", offset)
+	case OpGetGlobal:
+		return chunk.constantInstruction("OP_GET_GLOBAL", offset)
+	case OpSetGlobal:
+		return chunk.constantInstruction("OP_SET_GLOBAL", offset)
 	default:
 		fmt.Printf("Unknown opcode %d\n", instruction)
 		return offset + 1

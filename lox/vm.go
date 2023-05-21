@@ -6,9 +6,10 @@ import (
 )
 
 type Vm struct {
-	chunk *Chunk
-	ip    int
-	stack []Value
+	chunk   *Chunk
+	ip      int
+	stack   []Value
+	globals map[StringValue]Value
 }
 
 type InterpretResult int
@@ -21,9 +22,10 @@ const (
 
 func NewVm() *Vm {
 	return &Vm{
-		chunk: NewChunk(),
-		ip:    0,
-		stack: make([]Value, 0),
+		chunk:   NewChunk(),
+		ip:      0,
+		stack:   make([]Value, 0),
+		globals: map[StringValue]Value{},
 	}
 }
 
@@ -65,8 +67,6 @@ func (vm *Vm) run() InterpretResult {
 		switch OpCode(instruction) {
 		case OpReturn:
 			{
-				vm.pop().print()
-				fmt.Println()
 				return InterpretOk
 			}
 		case OpConstant:
@@ -143,6 +143,38 @@ func (vm *Vm) run() InterpretResult {
 				b := vm.pop()
 				a := vm.pop()
 				vm.push(BoolValue(a != b))
+			}
+		case OpPrint:
+			{
+				vm.pop().print()
+				fmt.Println()
+			}
+		case OpPop:
+			vm.pop()
+		case OpDefineGlobal:
+			{
+				name := vm.readConstant().(StringValue)
+				vm.globals[name] = vm.pop()
+			}
+		case OpGetGlobal:
+			{
+				name := vm.readConstant().(StringValue)
+				if value, ok := vm.globals[name]; !ok {
+					vm.runtimeError("Undefined variable '%s'.", name)
+					return InterpretRuntimeError
+				} else {
+					vm.push(value)
+				}
+			}
+		case OpSetGlobal:
+			{
+				name := vm.readConstant().(StringValue)
+				if _, ok := vm.globals[name]; !ok {
+					vm.runtimeError("Undefined variable '%s'.", name)
+					return InterpretRuntimeError
+				} else {
+					vm.globals[name] = vm.peek(0)
+				}
 			}
 		}
 	}

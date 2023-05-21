@@ -30,8 +30,9 @@ func NewCompiler(source string, chunk *Chunk) *Compiler {
 
 func (compiler *Compiler) compile() bool {
 	compiler.advance()
-	compiler.expression()
-	compiler.consume(TokenEOF, "Expect end of expression.")
+	for !compiler.match(TokenEOF) {
+		compiler.declaration()
+	}
 	compiler.end()
 	return !compiler.hadError
 }
@@ -116,22 +117,105 @@ func (compiler *Compiler) consume(tokenType TokenType, message string) {
 	}
 	compiler.errorAtCurrent(message)
 }
+func (compiler *Compiler) match(tokenType TokenType) bool {
+	if !compiler.check(tokenType) {
+		return false
+	}
+	compiler.advance()
+	return true
+}
+
+func (compiler *Compiler) check(tokenType TokenType) bool {
+	return compiler.current.tokenType == tokenType
+}
+
+func (compiler *Compiler) declaration() {
+	if compiler.match(TokenVar) {
+		compiler.varDeclaration()
+	} else {
+		compiler.statement()
+	}
+
+	if compiler.panicMode {
+		compiler.synchronize()
+	}
+}
+
+func (compiler *Compiler) synchronize() {
+	compiler.panicMode = false
+
+	for compiler.current.tokenType != TokenEOF {
+		if compiler.previous.tokenType == TokenSemicolon {
+			return
+		}
+		switch compiler.current.tokenType {
+		case TokenClass, TokenFun, TokenVar, TokenFor, TokenIf, TokenWhile, TokenPrint, TokenReturn:
+			return
+		}
+		compiler.advance()
+	}
+}
+
+func (compiler *Compiler) varDeclaration() {
+	global := compiler.parseVariable("Expect variable name.")
+	if compiler.match(TokenEqual) {
+		compiler.expression()
+	} else {
+		compiler.emitByte(byte(OpNil))
+	}
+	compiler.consume(TokenSemicolon, "Expect ';' after variable declaration.")
+
+	compiler.defineVariable(global)
+}
+
+func (compiler *Compiler) parseVariable(errorMessage string) int {
+	compiler.consume(TokenIdentifier, errorMessage)
+	return compiler.identifierConstant(&compiler.previous)
+}
+
+func (compiler *Compiler) identifierConstant(token *Token) int {
+	return compiler.makeConstant(StringValue(token.lexeme))
+}
+
+func (compiler *Compiler) defineVariable(global int) {
+	compiler.emitBytes(byte(OpDefineGlobal), byte(global))
+}
+
+func (compiler *Compiler) statement() {
+	if compiler.match(TokenPrint) {
+		compiler.printStatement()
+	} else {
+		compiler.expressionStatement()
+	}
+}
+
+func (compiler *Compiler) printStatement() {
+	compiler.expression()
+	compiler.consume(TokenSemicolon, "Expect ';' after value.")
+	compiler.emitByte(byte(OpPrint))
+}
+
+func (compiler *Compiler) expressionStatement() {
+	compiler.expression()
+	compiler.consume(TokenSemicolon, "Expect ';' after expression.")
+	compiler.emitByte(byte(OpPop))
+}
 
 func (compiler *Compiler) expression() {
 	compiler.parsePrecedence(PrecedenceAssignment)
 }
 
-func (compiler *Compiler) number() {
+func (compiler *Compiler) number(_ bool) {
 	value, _ := strconv.ParseFloat(compiler.previous.lexeme, 64)
 	compiler.emitConstant(NumberValue(value))
 }
 
-func (compiler *Compiler) grouping() {
+func (compiler *Compiler) grouping(_ bool) {
 	compiler.expression()
 	compiler.consume(TokenRightParen, "Expect ')' after expression.")
 }
 
-func (compiler *Compiler) unary() {
+func (compiler *Compiler) unary(_ bool) {
 	operatorType := compiler.previous.tokenType
 	compiler.parsePrecedence(PrecedenceUnary)
 
@@ -150,16 +234,21 @@ func (compiler *Compiler) parsePrecedence(precedence Precedence) {
 		compiler.error("Expect expression.")
 		return
 	}
-	prefixRule()
+	canAssign := precedence <= PrecedenceAssignment
+	prefixRule(canAssign)
 
 	for precedence <= compiler.getRule(compiler.current.tokenType).precedence {
 		compiler.advance()
 		infixRule := compiler.getRule(compiler.previous.tokenType).infix
-		infixRule()
+		infixRule(canAssign)
+	}
+
+	if canAssign && compiler.match(TokenEqual) {
+		compiler.error("Invalid assignment target.")
 	}
 }
 
-func (compiler *Compiler) binary() {
+func (compiler *Compiler) binary(_ bool) {
 	operatorType := compiler.previous.tokenType
 	rule := compiler.getRule(operatorType)
 	compiler.parsePrecedence(rule.precedence + 1)
@@ -188,7 +277,7 @@ func (compiler *Compiler) binary() {
 	}
 }
 
-func (compiler *Compiler) literal() {
+func (compiler *Compiler) literal(_ bool) {
 	switch compiler.previous.tokenType {
 	case TokenFalse:
 		compiler.emitByte(byte(OpFalse))
@@ -199,9 +288,23 @@ func (compiler *Compiler) literal() {
 	}
 }
 
-func (compiler *Compiler) string() {
+func (compiler *Compiler) string(_ bool) {
 	lexeme := compiler.previous.lexeme
 	compiler.emitConstant(StringValue(lexeme[1 : len(lexeme)-1]))
+}
+
+func (compiler *Compiler) variable(canAssign bool) {
+	compiler.namedVariable(compiler.previous, canAssign)
+}
+
+func (compiler *Compiler) namedVariable(token Token, canAssign bool) {
+	arg := compiler.identifierConstant(&token)
+	if canAssign && compiler.match(TokenEqual) {
+		compiler.expression()
+		compiler.emitBytes(byte(OpSetGlobal), byte(arg))
+	} else {
+		compiler.emitBytes(byte(OpGetGlobal), byte(arg))
+	}
 }
 
 func (compiler *Compiler) getRule(tokenType TokenType) ParseRule {
@@ -225,7 +328,7 @@ func (compiler *Compiler) getRule(tokenType TokenType) ParseRule {
 		TokenGreaterEqual: {nil, compiler.binary, PrecedenceComparison},
 		TokenLess:         {nil, compiler.binary, PrecedenceComparison},
 		TokenLessEqual:    {nil, compiler.binary, PrecedenceComparison},
-		TokenIdentifier:   {nil, nil, PrecedenceNone},
+		TokenIdentifier:   {compiler.variable, nil, PrecedenceNone},
 		TokenString:       {compiler.string, nil, PrecedenceNone},
 		TokenNumber:       {compiler.number, nil, PrecedenceNone},
 		TokenAnd:          {nil, nil, PrecedenceNone},
@@ -267,7 +370,7 @@ const (
 )
 
 type ParseRule struct {
-	prefix     func()
-	infix      func()
+	prefix     func(canAssign bool)
+	infix      func(canAssign bool)
 	precedence Precedence
 }

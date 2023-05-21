@@ -20,6 +20,11 @@ const (
 	OpGreaterEqual
 	OpLess
 	OpLessEqual
+	OpPrint
+	OpPop
+	OpDefineGlobal
+	OpGetGlobal
+	OpSetGlobal
 )
 
 type Chunk struct {
