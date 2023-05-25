@@ -67,6 +67,12 @@ func (chunk *Chunk) disassembleInstruction(offset int) int {
 		return chunk.byteInstruction("OP_GET_LOCAL", offset)
 	case OpSetLocal:
 		return chunk.byteInstruction("OP_SET_LOCAL", offset)
+	case OpJump:
+		return chunk.jumpInstruction("OP_JUMP", 1, offset)
+	case OpJumpIfFalse:
+		return chunk.jumpInstruction("OP_JUMP_IF_FALSE", 1, offset)
+	case OpLoop:
+		return chunk.jumpInstruction("OP_LOOP", -1, offset)
 	default:
 		fmt.Printf("Unknown opcode %d\n", instruction)
 		return offset + 1
@@ -90,4 +96,11 @@ func (chunk *Chunk) byteInstruction(name string, offset int) int {
 	slot := chunk.code[offset+1]
 	fmt.Printf("%-16s %4d\n", name, slot)
 	return offset + 2
+}
+
+func (chunk *Chunk) jumpInstruction(name string, sign int, offset int) int {
+	jump := int(chunk.code[offset+1]) << 8
+	jump |= int(chunk.code[offset+2])
+	fmt.Printf("%-16s %4d -> %d\n", name, offset, offset+3+sign*jump)
+	return offset + 3
 }

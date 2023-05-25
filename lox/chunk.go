@@ -27,6 +27,9 @@ const (
 	OpSetGlobal
 	OpGetLocal
 	OpSetLocal
+	OpJumpIfFalse
+	OpJump
+	OpLoop
 )
 
 type Chunk struct {

@@ -226,6 +226,12 @@ func (compiler *Compiler) markInitialized() {
 func (compiler *Compiler) statement() {
 	if compiler.match(TokenPrint) {
 		compiler.printStatement()
+	} else if compiler.match(TokenIf) {
+		compiler.ifStatement()
+	} else if compiler.match(TokenWhile) {
+		compiler.whileStatement()
+	} else if compiler.match(TokenFor) {
+		compiler.forStatement()
 	} else if compiler.match(TokenLeftBrace) {
 		compiler.beginScope()
 		compiler.block()
@@ -245,6 +251,97 @@ func (compiler *Compiler) endScope() {
 		compiler.emitByte(byte(OpPop))
 		compiler.locals = compiler.locals[:len(compiler.locals)-1]
 	}
+}
+
+func (compiler *Compiler) forStatement() {
+	compiler.beginScope()
+	compiler.consume(TokenLeftParen, "Expect '(' after 'for'.")
+	if compiler.match(TokenSemicolon) {
+		// No initializer.
+	} else if compiler.match(TokenVar) {
+		compiler.varDeclaration()
+	} else {
+		compiler.expressionStatement()
+	}
+
+	loopStart := len(compiler.currentChunk().code)
+	exitJump := -1
+	if !compiler.match(TokenSemicolon) {
+		compiler.expression()
+		compiler.consume(TokenSemicolon, "Expect ';' after loop condition.")
+		exitJump = compiler.emitJump(OpJumpIfFalse)
+		compiler.emitByte(byte(OpPop))
+	}
+
+	if !compiler.match(TokenRightParen) {
+		bodyJump := compiler.emitJump(OpJump)
+		incrementStart := len(compiler.currentChunk().code)
+		compiler.expression()
+		compiler.emitByte(byte(OpPop))
+		compiler.consume(TokenRightParen, "Expect ')' after for clauses.")
+		compiler.emitLoop(loopStart)
+		loopStart = incrementStart
+		compiler.patchJump(bodyJump)
+	}
+
+	compiler.statement()
+	compiler.emitLoop(loopStart)
+	if exitJump != -1 {
+		compiler.patchJump(exitJump)
+		compiler.emitByte(byte(OpPop))
+	}
+	compiler.endScope()
+}
+
+func (compiler *Compiler) whileStatement() {
+	loopStart := len(compiler.currentChunk().code)
+	compiler.consume(TokenLeftParen, "Expect '(' after 'while'.")
+	compiler.expression()
+	compiler.consume(TokenRightParen, "Expect ')' after condition.")
+	exitJump := compiler.emitJump(OpJumpIfFalse)
+	compiler.emitByte(byte(OpPop))
+	compiler.statement()
+	compiler.emitLoop(loopStart)
+	compiler.patchJump(exitJump)
+	compiler.emitByte(byte(OpPop))
+}
+
+func (compiler *Compiler) emitLoop(loopStart int) {
+	compiler.emitByte(byte(OpLoop))
+	offset := len(compiler.currentChunk().code) - loopStart + 2
+	compiler.emitByte(byte((offset >> 8) & 0xff))
+	compiler.emitByte(byte(offset & 0xff))
+}
+
+func (compiler *Compiler) ifStatement() {
+	compiler.consume(TokenLeftParen, "Expect '(' after 'if'.")
+	compiler.expression()
+	compiler.consume(TokenRightParen, "Expect ')' after condition.")
+
+	thenJump := compiler.emitJump(OpJumpIfFalse)
+	compiler.emitByte(byte(OpPop))
+	compiler.statement()
+	elseJump := compiler.emitJump(OpJump)
+	compiler.patchJump(thenJump)
+
+	compiler.emitByte(byte(OpPop))
+	if compiler.match(TokenElse) {
+		compiler.statement()
+	}
+	compiler.patchJump(elseJump)
+}
+
+func (compiler *Compiler) emitJump(instruction OpCode) int {
+	compiler.emitByte(byte(instruction))
+	compiler.emitByte(0xff)
+	compiler.emitByte(0xff)
+	return len(compiler.currentChunk().code) - 2
+}
+
+func (compiler *Compiler) patchJump(offset int) {
+	jump := len(compiler.currentChunk().code) - offset - 2
+	compiler.currentChunk().code[offset] = byte((jump >> 8) & 0xff)
+	compiler.currentChunk().code[offset+1] = byte(jump & 0xff)
 }
 
 func (compiler *Compiler) block() {
@@ -395,6 +492,22 @@ func (compiler *Compiler) resolveLocal(token Token) int {
 	return -1
 }
 
+func (compiler *Compiler) and(_ bool) {
+	endJump := compiler.emitJump(OpJumpIfFalse)
+	compiler.emitByte(byte(OpPop))
+	compiler.parsePrecedence(PrecedenceAnd)
+	compiler.patchJump(endJump)
+}
+
+func (compiler *Compiler) or(_ bool) {
+	elseJump := compiler.emitJump(OpJumpIfFalse)
+	endJump := compiler.emitJump(OpJump)
+	compiler.patchJump(elseJump)
+	compiler.emitByte(byte(OpPop))
+	compiler.parsePrecedence(PrecedenceOr)
+	compiler.patchJump(endJump)
+}
+
 func (compiler *Compiler) getRule(tokenType TokenType) ParseRule {
 	rules := map[TokenType]ParseRule{
 		TokenLeftParen:    {compiler.grouping, nil, PrecedenceNone},
@@ -419,7 +532,7 @@ func (compiler *Compiler) getRule(tokenType TokenType) ParseRule {
 		TokenIdentifier:   {compiler.variable, nil, PrecedenceNone},
 		TokenString:       {compiler.string, nil, PrecedenceNone},
 		TokenNumber:       {compiler.number, nil, PrecedenceNone},
-		TokenAnd:          {nil, nil, PrecedenceNone},
+		TokenAnd:          {nil, compiler.and, PrecedenceAnd},
 		TokenClass:        {nil, nil, PrecedenceNone},
 		TokenElse:         {nil, nil, PrecedenceNone},
 		TokenFalse:        {compiler.literal, nil, PrecedenceNone},
@@ -427,7 +540,7 @@ func (compiler *Compiler) getRule(tokenType TokenType) ParseRule {
 		TokenFun:          {nil, nil, PrecedenceNone},
 		TokenIf:           {nil, nil, PrecedenceNone},
 		TokenNil:          {compiler.literal, nil, PrecedenceNone},
-		TokenOr:           {nil, nil, PrecedenceNone},
+		TokenOr:           {nil, compiler.or, PrecedenceOr},
 		TokenPrint:        {nil, nil, PrecedenceNone},
 		TokenReturn:       {nil, nil, PrecedenceNone},
 		TokenSuper:        {nil, nil, PrecedenceNone},

@@ -186,8 +186,29 @@ func (vm *Vm) run() InterpretResult {
 				slot := vm.readByte()
 				vm.stack[slot] = vm.peek(0)
 			}
+		case OpJumpIfFalse:
+			{
+				offset := vm.readShort()
+				if !vm.peek(0).isTruthy() {
+					vm.ip += offset
+				}
+			}
+		case OpJump:
+			{
+				offset := vm.readShort()
+				vm.ip += offset
+			}
+		case OpLoop:
+			{
+				offset := vm.readShort()
+				vm.ip -= offset
+			}
 		}
 	}
+}
+
+func (vm *Vm) readShort() int {
+	return int(vm.readByte())<<8 | int(vm.readByte())
 }
 
 func (vm *Vm) readByte() byte {
